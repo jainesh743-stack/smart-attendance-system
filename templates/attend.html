@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% block title %}Mark Attendance – Smart Attendance{% endblock %}
+{% block content %}
+
+<!-- Anti-cheat removed: single laptop mode supported -->
+
+<div class="page-hdr">
+  <div class="container d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <h4 class="page-title mb-0"><i class="bi bi-shield-check me-2"></i>Mark Attendance</h4>
+      <p class="page-sub mb-0">Session ID: <code>{{ sid }}</code></p>
+    </div>
+    <a href="/student/dashboard" class="btn-logout"><i class="bi bi-arrow-left me-1"></i>Dashboard</a>
+  </div>
+</div>
+
+<div class="container py-4">
+
+  {% if error %}
+  <div class="alert-box error mb-4">
+    <i class="bi bi-x-circle-fill me-2"></i>{{ error }}
+    <br><a href="/student/dashboard" class="mt-2 d-inline-block">← Go back to dashboard</a>
+  </div>
+  {% else %}
+
+  <!-- Timer Bar -->
+  <div class="timer-card mb-4" id="timer-card">
+    <div class="timer-label"><i class="bi bi-clock-fill me-2"></i>Session expires in:</div>
+    <div class="timer-display" id="timer-display">02:00</div>
+    <div class="timer-bar-wrap">
+      <div class="timer-bar" id="timer-bar" style="width:100%"></div>
+    </div>
+  </div>
+
+  <!-- Steps Indicator -->
+  <div class="steps-row mb-4">
+    <div class="step-item active" id="step-1"><div class="step-dot">1</div><div class="step-lbl">Enter OTP</div></div>
+    <div class="step-line"></div>
+    <div class="step-item" id="step-2"><div class="step-dot">2</div><div class="step-lbl">Face Scan</div></div>
+    <div class="step-line"></div>
+    <div class="step-item" id="step-3"><div class="step-dot">3</div><div class="step-lbl">Done</div></div>
+  </div>
+
+  <!-- Step 1: OTP -->
+  <div id="otp-section">
+    <div class="attend-card">
+      <div class="attend-icon orange"><i class="bi bi-shield-lock-fill"></i></div>
+      <h5>Enter OTP</h5>
+      <p class="text-muted small">Ask your teacher for the 6-digit OTP displayed on the admin screen.</p>
+      <div class="otp-input-wrap">
+        <input type="text" id="otp-input" class="otp-input" maxlength="6" placeholder="000000"
+               oninput="this.value=this.value.replace(/\D/g,'')" autocomplete="off"/>
+      </div>
+      <button class="btn-submit w-100 mt-3" id="otp-btn" onclick="verifyOTP()">
+        <i class="bi bi-check-circle me-2"></i>Verify OTP
+      </button>
+      <div id="otp-msg" class="mt-2"></div>
+    </div>
+  </div>
+
+  <!-- Step 2: Face Scan (hidden initially) -->
+  <div id="face-section" class="d-none">
+    <div class="attend-card">
+      <h5><i class="bi bi-camera-fill me-2"></i>Face Recognition</h5>
+      <p class="text-muted small">OTP verified ✓. Now scan your face to complete attendance.</p>
+
+      <div class="scan-camera-wrap mb-3">
+        <video id="face-video" autoplay playsinline muted></video>
+        <canvas id="face-canvas" style="display:none"></canvas>
+        <div class="scan-overlay-corners">
+          <div class="sc tl"></div><div class="sc tr"></div>
+          <div class="sc bl"></div><div class="sc br"></div>
+        </div>
+        <div class="scan-moving-line"></div>
+        <div class="scan-bottom-label" id="face-cam-label">Camera loading...</div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button class="btn-submit flex-grow-1" id="face-btn" onclick="captureFace()">
+          <i class="bi bi-person-bounding-box me-2"></i>Scan My Face
+        </button>
+      </div>
+      <div id="face-msg" class="mt-2"></div>
+    </div>
+  </div>
+
+  <!-- Step 3: Success (hidden initially) -->
+  <div id="success-section" class="d-none">
+    <div class="attend-card success-card">
+      <div class="success-anim-wrap">
+        <div class="success-ring"></div>
+        <div class="success-checkmark"><i class="bi bi-check-lg"></i></div>
+      </div>
+      <h4 class="mt-3" id="success-name">Attendance Marked!</h4>
+      <p id="success-detail" class="text-muted"></p>
+      <div id="success-meta" class="success-meta-box"></div>
+      <a href="/student/dashboard" class="btn-submit mt-3 d-inline-block px-5">
+        <i class="bi bi-house me-2"></i>Go to Dashboard
+      </a>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const SID       = "{{ sid }}";
+const REMAINING = {{ remaining or 600 }};
+let secondsLeft = REMAINING;
+let timerInterval = null;
+let faceStream    = null;
+
+// ── Timer ──────────────────────────────────────────────────────────
+function startTimer() {
+  updateTimerUI();
+  timerInterval = setInterval(() => {
+    secondsLeft--;
+    updateTimerUI();
+    if (secondsLeft <= 0) {
+      clearInterval(timerInterval);
+      showExpired();
+    }
+  }, 1000);
+}
+
+function updateTimerUI() {
+  const m  = String(Math.floor(secondsLeft/60)).padStart(2,"0");
+  const s  = String(secondsLeft%60).padStart(2,"0");
+  const el = document.getElementById("timer-display");
+  const bar= document.getElementById("timer-bar");
+  if (!el) return;
+  el.textContent = `${m}:${s}`;
+  const pct = (secondsLeft / REMAINING) * 100;
+  if (bar) bar.style.width = pct + "%";
+  if (secondsLeft <= 30) {
+    el.style.color = "#ef4444";
+    if (bar) bar.style.background = "#ef4444";
+    document.getElementById("timer-card")?.classList.add("timer-urgent");
+  } else if (secondsLeft <= 60) {
+    el.style.color = "#f59e0b";
+    if (bar) bar.style.background = "#f59e0b";
+  }
+}
+
+function showExpired() {
+  document.getElementById("otp-section")?.classList.add("d-none");
+  document.getElementById("face-section")?.classList.add("d-none");
+  const timerCard = document.getElementById("timer-card");
+  if (timerCard) timerCard.innerHTML = `
+    <div class="text-center py-3">
+      <i class="bi bi-clock-history" style="font-size:2rem;color:#ef4444"></i>
+      <h5 class="mt-2" style="color:#ef4444">Session Expired</h5>
+      <p class="text-muted small">Ask your teacher to start a new attendance session.</p>
+      <a href="/student/dashboard" class="btn-submit mt-2">Back to Dashboard</a>
+    </div>`;
+  stopCamera();
+}
+
+// ── Step Indicator ─────────────────────────────────────────────────
+function setStep(n) {
+  [1,2,3].forEach(i => {
+    const el = document.getElementById("step-"+i);
+    if (!el) return;
+    el.classList.remove("active","done");
+    if (i < n)  el.classList.add("done");
+    if (i == n) el.classList.add("active");
+  });
+}
+
+// ── OTP Verify ─────────────────────────────────────────────────────
+async function verifyOTP() {
+  const otp = document.getElementById("otp-input").value.trim();
+  if (otp.length < 4) { showMsg("otp-msg","error","Please enter the OTP"); return; }
+
+  const btn = document.getElementById("otp-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Verifying...';
+
+  const res  = await fetch("/api/verify_otp", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ session_id: SID, otp })
+  }).catch(()=>null);
+
+  if (!res) { showMsg("otp-msg","error","Server error"); btn.disabled=false; btn.innerHTML='<i class="bi bi-check-circle me-2"></i>Verify OTP'; return; }
+  const data = await res.json();
+
+  if (data.success) {
+    showMsg("otp-msg","success","OTP verified! Loading camera...");
+    setTimeout(() => {
+      document.getElementById("otp-section").classList.add("d-none");
+      document.getElementById("face-section").classList.remove("d-none");
+      setStep(2);
+      startCamera();
+    }, 800);
+  } else {
+    showMsg("otp-msg","error", data.message || "Invalid OTP");
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Verify OTP';
+  }
+}
+
+// ── Camera ─────────────────────────────────────────────────────────
+async function startCamera() {
+  try {
+    faceStream = await navigator.mediaDevices.getUserMedia({ video: { width:640, height:480, facingMode:"user" } });
+    document.getElementById("face-video").srcObject = faceStream;
+    document.getElementById("face-cam-label").textContent = "Camera ready – click Scan My Face";
+  } catch(e) {
+    showMsg("face-msg","error","Camera error: " + e.message);
+  }
+}
+
+function stopCamera() {
+  if (faceStream) faceStream.getTracks().forEach(t=>t.stop());
+}
+
+// ── Face Capture ───────────────────────────────────────────────────
+async function captureFace() {
+  const video  = document.getElementById("face-video");
+  const canvas = document.getElementById("face-canvas");
+  canvas.width  = video.videoWidth  || 640;
+  canvas.height = video.videoHeight || 480;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+  const img = canvas.toDataURL("image/jpeg", 0.85);
+
+  const btn = document.getElementById("face-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Scanning face...';
+  document.getElementById("face-cam-label").textContent = "Analyzing...";
+
+  const res  = await fetch("/api/mark_attendance", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ session_id: SID, image: img })
+  }).catch(()=>null);
+
+  if (!res) {
+    showMsg("face-msg","error","Server error. Is Flask running?");
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-person-bounding-box me-2"></i>Scan My Face';
+    return;
+  }
+
+  const data = await res.json();
+
+  if (data.success || data.already_marked) {
+    clearInterval(timerInterval);
+    stopCamera();
+    setStep(3);
+    document.getElementById("face-section").classList.add("d-none");
+    document.getElementById("success-section").classList.remove("d-none");
+    document.getElementById("timer-card").classList.add("d-none");
+
+    if (data.already_marked) {
+      document.getElementById("success-name").textContent = "Already Marked!";
+      document.getElementById("success-detail").textContent = "Your attendance was already recorded today.";
+    } else {
+      document.getElementById("success-name").textContent = "Attendance Marked!";
+      document.getElementById("success-detail").textContent = data.message;
+    }
+    document.getElementById("success-meta").innerHTML = `
+      <div><i class="bi bi-person-fill me-2"></i><b>${data.name || ""}</b></div>
+      <div><i class="bi bi-card-text me-2"></i>Roll: ${data.roll_no || ""}</div>
+      ${data.confidence ? `<div><i class="bi bi-graph-up me-2"></i>Confidence: ${data.confidence}%</div>` : ""}
+      <div><i class="bi bi-clock me-2"></i>${new Date().toLocaleTimeString()}</div>`;
+  } else {
+    showMsg("face-msg","error", data.message || "Face not recognized");
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-person-bounding-box me-2"></i>Try Again';
+    document.getElementById("face-cam-label").textContent = "Try again";
+  }
+}
+
+// ── Utility ────────────────────────────────────────────────────────
+function showMsg(id, type, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = `<div class="alert-box ${type} mt-2"><i class="bi bi-${type==='error'?'x-circle':'check-circle'} me-2"></i>${text}</div>`;
+}
+
+// Enter key on OTP
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("otp-input")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") verifyOTP();
+  });
+  startTimer();
+});
+</script>
+{% endblock %}

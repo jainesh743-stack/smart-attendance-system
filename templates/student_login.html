@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Student Login – Smart Attendance{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-logo blue"><i class="bi bi-person-fill"></i></div>
+    <h3 class="auth-title">Student Login</h3>
+    <p class="auth-sub">Login to mark your attendance</p>
+
+    {% if error %}
+    <div class="alert-box error mb-3"><i class="bi bi-x-circle me-2"></i>{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/student/login">
+      <div class="field-group">
+        <label>Roll Number</label>
+        <div class="input-icon-wrap">
+          <i class="bi bi-person-badge-fill"></i>
+          <input type="text" name="roll_no" class="form-input" placeholder="e.g. BCA2024001" required autofocus/>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Password</label>
+        <div class="input-icon-wrap">
+          <i class="bi bi-lock-fill"></i>
+          <input type="password" name="password" class="form-input" placeholder="Your password" required/>
+        </div>
+      </div>
+      <button type="submit" class="btn-submit w-100 mt-2">
+        <i class="bi bi-box-arrow-in-right me-2"></i>Login
+      </button>
+    </form>
+
+    <div class="auth-links">
+      <a href="/register"><i class="bi bi-person-plus me-1"></i>New student? Register here</a>
+      <a href="/"><i class="bi bi-arrow-left me-1"></i>Back to Home</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

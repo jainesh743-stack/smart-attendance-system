@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<nav class="admin-navbar">
+  <div class="container-fluid px-4 d-flex justify-content-between align-items-center">
+    <div class="d-flex align-items-center gap-3">
+      <div class="brand-icon sm"><i class="bi bi-eye-fill"></i></div>
+      <div>
+        <div class="brand-name">Admin Dashboard</div>
+        <div class="brand-sub">Smart Attendance System</div>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {% if demo_mode %}<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Demo Mode</span>{% endif %}
+      <button class="theme-toggle" id="themeToggle"><i class="bi bi-sun-fill" id="themeIcon"></i></button>
+      <a href="/" class="btn btn-sm btn-outline-secondary"><i class="bi bi-house me-1"></i>Home</a>
+      <a href="/admin/logout" class="btn btn-sm btn-danger"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid px-4 py-4">
+
+  <!-- Stats Row -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3"><div class="admin-stat-card blue"><div class="admin-stat-icon"><i class="bi bi-people-fill"></i></div><div class="admin-stat-val">{{ total_students }}</div><div class="admin-stat-label">Total Students</div></div></div>
+    <div class="col-6 col-md-3"><div class="admin-stat-card green"><div class="admin-stat-icon"><i class="bi bi-check-circle-fill"></i></div><div class="admin-stat-val">{{ today_present }}</div><div class="admin-stat-label">Present Today</div></div></div>
+    <div class="col-6 col-md-3"><div class="admin-stat-card red"><div class="admin-stat-icon"><i class="bi bi-x-circle-fill"></i></div><div class="admin-stat-val">{{ today_absent }}</div><div class="admin-stat-label">Absent Today</div></div></div>
+    <div class="col-6 col-md-3"><div class="admin-stat-card purple"><div class="admin-stat-icon"><i class="bi bi-calendar2-check-fill"></i></div><div class="admin-stat-val" style="font-size:1.1rem">{{ today }}</div><div class="admin-stat-label">Today's Date</div></div></div>
+  </div>
+
+  <div class="row g-3 mb-4">
+
+    <!-- QR + OTP Session Card -->
+    <div class="col-lg-5">
+      <div class="admin-card h-100">
+        <h6 class="admin-card-title"><i class="bi bi-qr-code me-2"></i>Attendance Session</h6>
+
+        <!-- Start Button -->
+        <div id="session-start-area" class="text-center py-3">
+          <p class="text-muted small mb-3">Start a new session to generate QR Code and OTP for students.</p>
+          <button class="btn-hero primary w-100" onclick="startSession()">
+            <i class="bi bi-play-circle-fill me-2"></i>Start Attendance Session
+            <span class="btn-sub-text">Generate QR + OTP</span>
+          </button>
+        </div>
+
+        <!-- Active Session Display (hidden initially) -->
+        <div id="session-active-area" class="d-none">
+
+          <!-- Timer -->
+          <div class="timer-card mb-3" id="admin-timer-card">
+            <div class="timer-label"><i class="bi bi-clock-fill me-2"></i>Session expires in:</div>
+            <div class="timer-display" id="admin-timer">02:00</div>
+            <div class="timer-bar-wrap"><div class="timer-bar" id="admin-timer-bar" style="width:100%"></div></div>
+          </div>
+
+          <div class="row g-2">
+            <!-- QR Code -->
+            <div class="col-7">
+              <div class="qr-display-box">
+                <p class="qr-label mb-2">📱 Students scan this:</p>
+                <img id="qr-img" src="" alt="QR Code" class="qr-img"/>
+                <p class="text-muted" style="font-size:.7rem;margin-top:6px">Session ID: <code id="qr-sid"></code></p>
+              </div>
+            </div>
+            <!-- OTP -->
+            <div class="col-5 d-flex flex-column gap-2">
+              <div class="otp-display-box">
+                <div class="otp-label">🔐 OTP</div>
+                <div class="otp-big" id="admin-otp">------</div>
+                <div class="otp-sub">Tell students this code</div>
+              </div>
+              <button class="btn-submit-sm" onclick="startSession()">
+                <i class="bi bi-arrow-clockwise me-1"></i>New Session
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Expired -->
+        <div id="session-expired-area" class="d-none text-center py-3">
+          <i class="bi bi-clock-history" style="font-size:2.5rem;color:#ef4444"></i>
+          <p class="mt-2" style="color:#ef4444;font-weight:600">Session Expired</p>
+          <button class="btn-submit mt-1" onclick="startSession()"><i class="bi bi-play-circle me-2"></i>Start New Session</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="col-lg-4">
+      <div class="admin-card h-100">
+        <h6 class="admin-card-title"><i class="bi bi-pie-chart-fill me-2"></i>Today's Overview</h6>
+        {% if total_students > 0 %}
+        <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
+        {% else %}
+        <div class="empty-msg">No students registered yet.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="col-lg-3">
+      <div class="admin-card h-100">
+        <h6 class="admin-card-title"><i class="bi bi-exclamation-triangle-fill me-2 text-warning"></i>Security Alerts</h6>
+        {% if alerts %}
+        <div style="max-height:260px;overflow-y:auto;">
+          {% for a in alerts %}
+          <div class="alert-item">
+            <div class="alert-msg">{{ a.message }}</div>
+            <div class="alert-time">{{ a.time }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-msg"><i class="bi bi-shield-check me-2 text-success"></i>No suspicious activity</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Today's Attendance -->
+  <div class="admin-card mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <h6 class="admin-card-title mb-0"><i class="bi bi-clock-fill me-2"></i>Today's Attendance ({{ today }})</h6>
+      <div class="d-flex gap-2">
+        <a href="/admin/download" class="btn-submit-sm green"><i class="bi bi-download me-1"></i>Download CSV</a>
+        <button class="btn-submit-sm red" onclick="clearToday()"><i class="bi bi-trash me-1"></i>Clear Today</button>
+      </div>
+    </div>
+    {% if today_records %}
+    <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
+      <table class="data-table">
+        <thead><tr><th>#</th><th>Name</th><th>Roll No</th><th>Time</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for r in today_records %}
+          <tr><td>{{ loop.index }}</td><td><b>{{ r.Name }}</b></td><td><span class="roll-chip">{{ r["Roll Number"] }}</span></td><td>{{ r.Time }}</td><td><span class="chip green">✓ Present</span></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-msg"><i class="bi bi-inbox me-2"></i>No attendance marked today.</div>
+    {% endif %}
+  </div>
+
+  <!-- All Students -->
+  <div class="admin-card mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <h6 class="admin-card-title mb-0"><i class="bi bi-table me-2"></i>All Registered Students</h6>
+      <input type="text" class="form-input" style="max-width:200px;padding:6px 12px;font-size:.85rem" placeholder="🔍 Search..." oninput="filterTable(this.value)"/>
+    </div>
+    {% if students %}
+    <div class="table-responsive">
+      <table class="data-table" id="students-table">
+        <thead><tr><th>#</th><th>Name</th><th>Roll No</th><th>Course</th><th>Sem</th><th>Mobile</th><th>Present</th><th>Attendance %</th><th>Today</th><th>Action</th></tr></thead>
+        <tbody id="students-tbody">
+          {% for s in students %}
+          <tr id="row-{{ s.roll_no }}">
+            <td>{{ loop.index }}</td>
+            <td><b>{{ s.name }}</b></td>
+            <td><span class="roll-chip">{{ s.roll_no }}</span></td>
+            <td>{{ s.course }}</td>
+            <td>{{ s.semester }}</td>
+            <td>{{ s.mobile }}</td>
+            <td>{{ s.total_present }}</td>
+            <td>
+              <div class="pct-bar">
+                <div class="pct-fill {% if s.percentage >= 75 %}pct-good{% elif s.percentage >= 50 %}pct-ok{% else %}pct-low{% endif %}" style="width:{{ s.percentage }}%"></div>
+                <span class="pct-text">{{ s.percentage }}%</span>
+              </div>
+            </td>
+            <td>{% if s.today_status == "Present" %}<span class="chip green">✓ Present</span>{% else %}<span class="chip red">✗ Absent</span>{% endif %}</td>
+            <td><button class="btn-icon-del" onclick="deleteStudent('{{ s.roll_no }}')"><i class="bi bi-trash"></i></button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-msg"><i class="bi bi-people me-2"></i>No students registered. <a href="/register">Register first student</a></div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// Theme
+const savedTheme = localStorage.getItem("theme") || "light";
+document.documentElement.setAttribute("data-theme", savedTheme);
+document.getElementById("themeIcon").className = savedTheme === "dark" ? "bi bi-moon-fill" : "bi bi-sun-fill";
+document.getElementById("themeToggle").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const next = cur === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  document.getElementById("themeIcon").className = next === "dark" ? "bi bi-moon-fill" : "bi bi-sun-fill";
+});
+
+// Pie Chart
+{% if total_students > 0 %}
+new Chart(document.getElementById("pieChart").getContext("2d"), {
+  type: "doughnut",
+  data: {
+    labels: ["Present","Absent"],
+    datasets: [{ data: [{{ today_present }},{{ today_absent }}], backgroundColor: ["#22c55e","#ef4444"], borderWidth: 0, hoverOffset: 6 }]
+  },
+  options: { plugins: { legend: { position:"bottom", labels: { font: { family:"Outfit" }, color: document.documentElement.getAttribute("data-theme")==="dark"?"#94a3b8":"#64748b" } } }, cutout:"65%", responsive:true, maintainAspectRatio:true }
+});
+{% endif %}
+
+// Session vars
+let adminTimer = null;
+let sessionSeconds = 0;
+let currentSid = "";
+
+async function startSession() {
+  const res  = await fetch("/admin/start_session", { method:"POST" }).catch(()=>null);
+  if (!res) { alert("Server error"); return; }
+  const data = await res.json();
+  if (!data.success) { alert("Failed to start session"); return; }
+
+  currentSid     = data.session_id;
+  sessionSeconds = data.duration;
+
+  document.getElementById("session-start-area").classList.add("d-none");
+  document.getElementById("session-expired-area").classList.add("d-none");
+  document.getElementById("session-active-area").classList.remove("d-none");
+  document.getElementById("admin-otp").textContent = data.otp;
+  document.getElementById("qr-img").src = data.qr_url + "?t=" + Date.now();
+  document.getElementById("qr-sid").textContent = data.session_id;
+
+  // Start countdown
+  clearInterval(adminTimer);
+  updateAdminTimer();
+  adminTimer = setInterval(() => {
+    sessionSeconds--;
+    updateAdminTimer();
+    if (sessionSeconds <= 0) {
+      clearInterval(adminTimer);
+      document.getElementById("session-active-area").classList.add("d-none");
+      document.getElementById("session-expired-area").classList.remove("d-none");
+    }
+  }, 1000);
+}
+
+function updateAdminTimer() {
+  const m   = String(Math.floor(sessionSeconds/60)).padStart(2,"0");
+  const s   = String(sessionSeconds%60).padStart(2,"0");
+  const el  = document.getElementById("admin-timer");
+  const bar = document.getElementById("admin-timer-bar");
+  if (el)  el.textContent = `${m}:${s}`;
+  if (bar) bar.style.width = (sessionSeconds / 600 * 100) + "%";
+  if (sessionSeconds <= 30 && el) { el.style.color="#ef4444"; if(bar) bar.style.background="#ef4444"; }
+  else if (sessionSeconds <= 60 && el) { el.style.color="#f59e0b"; if(bar) bar.style.background="#f59e0b"; }
+}
+
+function filterTable(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll("#students-tbody tr").forEach(r => {
+    r.style.display = r.textContent.toLowerCase().includes(q) ? "" : "none";
+  });
+}
+
+async function deleteStudent(roll) {
+  if (!confirm("Delete student " + roll + "? This cannot be undone.")) return;
+  const res = await fetch("/admin/delete_student/" + roll, { method:"POST" });
+  if ((await res.json()).success) document.getElementById("row-"+roll)?.remove();
+}
+
+async function clearToday() {
+  if (!confirm("Clear all of today's attendance?")) return;
+  const res = await fetch("/admin/clear_today", { method:"POST" });
+  if ((await res.json()).success) location.reload();
+}
+</script>
+</body>
+</html>

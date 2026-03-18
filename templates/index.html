@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Home – Smart Attendance{% endblock %}
+{% block content %}
+
+<section class="hero-section">
+  <div class="hero-glow"></div>
+  <div class="container text-center hero-content">
+    <div class="hero-badge"><i class="bi bi-cpu-fill me-2"></i>AI-Powered · QR · OTP · Face Recognition</div>
+    <h1 class="hero-title">Smart Attendance<br><span class="accent-text">Next-Gen Security</span></h1>
+    <p class="hero-desc">Multi-factor attendance: Login → QR Scan → OTP → Face Match</p>
+
+    <div class="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-5">
+      <a href="/student/login" class="btn-hero primary">
+        <i class="bi bi-person-fill me-2"></i>Student Login
+        <span class="btn-sub-text">Mark Your Attendance</span>
+      </a>
+      <a href="/register" class="btn-hero outline">
+        <i class="bi bi-person-plus-fill me-2"></i>Register
+        <span class="btn-sub-text">New Student</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Flow Steps -->
+<section class="py-5">
+  <div class="container">
+    <h2 class="section-title text-center mb-5">How It Works</h2>
+    <div class="flow-row">
+      <div class="flow-step">
+        <div class="flow-icon blue"><i class="bi bi-person-check-fill"></i></div>
+        <div class="flow-arrow"><i class="bi bi-arrow-right-short"></i></div>
+        <div class="flow-label">Login</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon purple"><i class="bi bi-qr-code-scan"></i></div>
+        <div class="flow-arrow"><i class="bi bi-arrow-right-short"></i></div>
+        <div class="flow-label">Scan QR</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon orange"><i class="bi bi-shield-lock-fill"></i></div>
+        <div class="flow-arrow"><i class="bi bi-arrow-right-short"></i></div>
+        <div class="flow-label">Enter OTP</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon teal"><i class="bi bi-camera-fill"></i></div>
+        <div class="flow-arrow"><i class="bi bi-arrow-right-short"></i></div>
+        <div class="flow-label">Face Scan</div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon green"><i class="bi bi-check-circle-fill"></i></div>
+        <div class="flow-arrow" style="visibility:hidden"><i class="bi bi-arrow-right-short"></i></div>
+        <div class="flow-label">Done!</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Today's Attendance -->
+<section class="py-4 section-alt">
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="section-title mb-0"><i class="bi bi-list-check me-2"></i>Today's Attendance</h5>
+      <button class="btn-sm-refresh" onclick="loadToday()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+    </div>
+    <div id="today-list">
+      <div class="text-center py-3"><div class="spinner-border spinner-border-sm text-secondary"></div></div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadToday() {
+  const res  = await fetch("/api/today_attendance").catch(()=>null);
+  if (!res) { document.getElementById("today-list").innerHTML = '<div class="alert-box error">Server not reachable.</div>'; return; }
+  const data = await res.json();
+  const el   = document.getElementById("today-list");
+  if (!data.records.length) {
+    el.innerHTML = '<div class="empty-msg"><i class="bi bi-inbox me-2"></i>No attendance marked yet today.</div>'; return;
+  }
+  el.innerHTML = `<div class="table-responsive"><table class="data-table"><thead><tr><th>#</th><th>Name</th><th>Roll No</th><th>Time</th><th>Status</th></tr></thead><tbody>
+    ${data.records.map((r,i)=>`<tr><td>${i+1}</td><td><b>${r.Name}</b></td><td><span class="roll-chip">${r["Roll Number"]}</span></td><td>${r.Time}</td><td><span class="chip green">✓ Present</span></td></tr>`).join("")}
+  </tbody></table></div>`;
+}
+loadToday();
+setInterval(loadToday, 30000);
+</script>
+{% endblock %}

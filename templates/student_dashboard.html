@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – {{ student.name }}{% endblock %}
+{% block content %}
+
+<!-- Anti-cheat removed: single laptop mode supported -->
+
+<div class="page-hdr">
+  <div class="container d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <h4 class="page-title mb-0">Welcome, {{ student.name }} 👋</h4>
+      <p class="page-sub mb-0">{{ student.course }} · Semester {{ student.semester }} · {{ student.roll_no }}</p>
+    </div>
+    <a href="/student/logout" class="btn-logout"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
+  </div>
+</div>
+
+{% if session.get('tab_warn') %}
+<div class="container mt-3">
+  <div class="alert-box warning"><i class="bi bi-exclamation-triangle me-2"></i>
+    <strong>Warning:</strong> You were logged out because you switched tabs or minimized the browser. This action is monitored for security.
+  </div>
+</div>
+{% endif %}
+
+<div class="container py-4">
+
+  <!-- Tab warning removed for single-laptop demo mode -->
+
+  <!-- Stats Row -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="stat-card blue">
+        <div class="stat-ic"><i class="bi bi-calendar-check-fill"></i></div>
+        <div class="stat-val">{{ total_present }}</div>
+        <div class="stat-lbl">Days Present</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card {% if low_attendance %}red{% elif percentage >= 75 %}green{% else %}orange{% endif %}">
+        <div class="stat-ic"><i class="bi bi-graph-up"></i></div>
+        <div class="stat-val">{{ percentage }}%</div>
+        <div class="stat-lbl">Attendance</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card purple">
+        <div class="stat-ic"><i class="bi bi-calendar3"></i></div>
+        <div class="stat-val">{{ total_days }}</div>
+        <div class="stat-lbl">Total Days</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="stat-card {% if today_marked %}green{% else %}gray{% endif %}">
+        <div class="stat-ic"><i class="bi bi-{% if today_marked %}check-circle-fill{% else %}clock{% endif %}"></i></div>
+        <div class="stat-val">{% if today_marked %}✓{% else %}–{% endif %}</div>
+        <div class="stat-lbl">Today</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Low Attendance Warning -->
+  {% if low_attendance %}
+  <div class="alert-box error mb-4">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    <strong>Low Attendance Warning!</strong> Your attendance is {{ percentage }}%, which is below the required 75%.
+    Please attend more classes to avoid issues.
+  </div>
+  {% endif %}
+
+  <!-- Today status -->
+  {% if today_marked %}
+  <div class="alert-box success mb-4">
+    <i class="bi bi-check-circle-fill me-2"></i>
+    <strong>Attendance already marked today!</strong> See you tomorrow.
+  </div>
+  {% else %}
+  <!-- Main Action: Scan QR -->
+  <div class="action-card">
+    <div class="action-icon"><i class="bi bi-qr-code-scan"></i></div>
+    <h5>Ready to Mark Attendance?</h5>
+    <p class="text-muted">Ask your teacher to display the QR code, then scan it with your device camera.</p>
+    <div class="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-3">
+      <button class="btn-hero primary" onclick="openQRScanner()">
+        <i class="bi bi-qr-code-scan me-2"></i>Scan QR Code
+        <span class="btn-sub-text">Open Camera to Scan</span>
+      </button>
+      <div class="or-divider">OR</div>
+      <div class="manual-input-wrap">
+        <input type="text" id="manual-sid" class="form-input" placeholder="Enter Session ID manually"/>
+        <button class="btn-submit" onclick="goToSession()">
+          <i class="bi bi-arrow-right me-1"></i>Go
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Scanner Modal -->
+  <div id="qr-scanner-modal" class="modal-overlay d-none">
+    <div class="modal-box">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0"><i class="bi bi-qr-code-scan me-2"></i>Scan QR Code</h6>
+        <button onclick="closeQRScanner()" class="btn-icon-close"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div id="qr-video-wrap" class="qr-video-container">
+        <video id="qr-video" autoplay playsinline muted></video>
+        <div class="qr-scan-frame">
+          <div class="qr-corner tl"></div><div class="qr-corner tr"></div>
+          <div class="qr-corner bl"></div><div class="qr-corner br"></div>
+        </div>
+        <p class="qr-hint">Point camera at QR code</p>
+      </div>
+      <p id="qr-status" class="text-center text-muted small mt-2">Scanning...</p>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- jsQR for QR scanning -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+// Single laptop mode - no tab detection
+
+let qrStream = null;
+let qrScanInterval = null;
+
+async function openQRScanner() {
+  document.getElementById("qr-scanner-modal").classList.remove("d-none");
+  try {
+    qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    document.getElementById("qr-video").srcObject = qrStream;
+    document.getElementById("qr-status").textContent = "Scanning QR code...";
+    qrScanInterval = setInterval(scanQRFrame, 400);
+  } catch(e) {
+    document.getElementById("qr-status").textContent = "Camera error: " + e.message;
+  }
+}
+
+function closeQRScanner() {
+  clearInterval(qrScanInterval);
+  if (qrStream) qrStream.getTracks().forEach(t=>t.stop());
+  document.getElementById("qr-scanner-modal").classList.add("d-none");
+}
+
+function scanQRFrame() {
+  const video = document.getElementById("qr-video");
+  if (!video.videoWidth) return;
+  const canvas = document.createElement("canvas");
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+  const imageData = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(imageData.data, imageData.width, imageData.height);
+  if (code) {
+    document.getElementById("qr-status").textContent = "✓ QR Detected! Redirecting...";
+    clearInterval(qrScanInterval);
+    if (qrStream) qrStream.getTracks().forEach(t=>t.stop());
+    // Extract session ID from URL or use directly
+    const url = code.data;
+    if (url.includes("/attend/")) {
+      window.location.href = url;
+    } else {
+      window.location.href = "/attend/" + url;
+    }
+  }
+}
+
+function goToSession() {
+  const sid = document.getElementById("manual-sid").value.trim();
+  if (!sid) { alert("Please enter a session ID"); return; }
+  window.location.href = "/attend/" + sid;
+}
+</script>
+{% endblock %}
